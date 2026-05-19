@@ -1,0 +1,66 @@
+"use client"
+
+import Link from "next/link"
+import type { Entity } from "@arkiv-network/sdk"
+import type { SessionPayload } from "@/lib/arkiv/sessions"
+import { MODE_CONFIG } from "@/lib/ai/prompts"
+
+const MODE_BADGE = {
+  lex: "border-amber-500/30 bg-amber-500/5 text-amber-400",
+  bio: "border-emerald-500/30 bg-emerald-500/5 text-emerald-400",
+  doc: "border-indigo-500/30 bg-indigo-500/5 text-indigo-400",
+}
+
+interface SessionCardProps {
+  session: Entity
+  onArchive?: (session: Entity) => void
+}
+
+export function SessionCard({ session, onArchive }: SessionCardProps) {
+  let payload: SessionPayload | null = null
+  try {
+    payload = session.toJson() as SessionPayload
+  } catch {
+    return null
+  }
+
+  const mode = payload.mode
+  const config = MODE_CONFIG[mode]
+  const createdAt = new Date(payload.createdAt).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  })
+
+  return (
+    <div className="p-4 border border-[#2a2a2a] bg-[#141414] hover:border-[#3d3d3d] transition-colors">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 border text-xs font-mono font-medium ${MODE_BADGE[mode]}`}>
+              {config.icon} {config.label}
+            </span>
+          </div>
+          <h3 className="text-sm font-medium text-[#f0ede8] truncate">{payload.title}</h3>
+          <p className="text-xs text-[#3d3d3d] mt-0.5 font-mono">Created {createdAt}</p>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {onArchive && (
+            <button
+              onClick={() => onArchive(session)}
+              className="text-xs text-[#3d3d3d] hover:text-[#6b6b6b] transition-colors"
+            >
+              Archive
+            </button>
+          )}
+          <Link
+            href={`/session/${session.key}`}
+            className="px-3 py-1.5 text-xs font-medium border border-[#2a2a2a] hover:border-[#3d3d3d] text-[#f0ede8] transition-colors"
+          >
+            Open →
+          </Link>
+        </div>
+      </div>
+    </div>
+  )
+}

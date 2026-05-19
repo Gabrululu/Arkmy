@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Prevent bundling of Node-native modules used in API routes
+  serverExternalPackages: ["pdf-parse", "mammoth"],
 };
 
 export default nextConfig;
