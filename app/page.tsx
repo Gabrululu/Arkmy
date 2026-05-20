@@ -70,7 +70,7 @@ const MODES = [
     linkText: "Bio",
   },
   {
-    icon: "◈",
+    icon: "📄",
     tag: "DOC",
     name: "Research & document agent.",
     desc: "Academic papers, analysis, synthesis. Expires with your project.",

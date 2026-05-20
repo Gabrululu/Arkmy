@@ -142,7 +142,7 @@ pnpm install
 ### 2. Configure environment
 
 ```bash
-cp .env.local.example .env.local
+cp .env.example .env.local
 ```
 
 Open `.env.local` and fill in your key:

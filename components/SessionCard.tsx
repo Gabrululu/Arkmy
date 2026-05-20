@@ -14,9 +14,10 @@ const MODE_BADGE = {
 interface SessionCardProps {
   session: Entity
   onArchive?: (session: Entity) => void
+  onExtend?: (session: Entity) => void
 }
 
-export function SessionCard({ session, onArchive }: SessionCardProps) {
+export function SessionCard({ session, onArchive, onExtend }: SessionCardProps) {
   const isEncrypted = session.attributes?.find((a) => a.key === "encrypted")?.value === "true"
 
   let title: string
@@ -69,6 +70,14 @@ export function SessionCard({ session, onArchive }: SessionCardProps) {
               className="text-xs text-[#3d3d3d] hover:text-[#6b6b6b] transition-colors"
             >
               Archive
+            </button>
+          )}
+          {onExtend && (
+            <button
+              onClick={() => onExtend(session)}
+              className="text-xs text-[#3d3d3d] hover:text-[#6b6b6b] transition-colors font-mono"
+            >
+              +Extend
             </button>
           )}
           <Link

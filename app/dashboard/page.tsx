@@ -1,12 +1,13 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { useAccount, useWalletClient } from "wagmi"
 import type { Hex } from "@arkiv-network/sdk"
 import type { Entity } from "@arkiv-network/sdk"
 import type { SessionPayload, AgentMode } from "@/lib/arkiv/sessions"
-import { fetchSessions, archiveSession } from "@/lib/arkiv/sessions"
+import { fetchSessions, archiveSession, extendSession, fetchExpiringSessions } from "@/lib/arkiv/sessions"
+import { publicClient } from "@/lib/arkiv/client"
 import { WalletConnect } from "@/components/WalletConnect"
 import { SessionCard } from "@/components/SessionCard"
 import { MODE_CONFIG } from "@/lib/ai/prompts"
@@ -18,20 +19,52 @@ export default function Dashboard() {
   const { data: walletClient } = useWalletClient()
   const [mounted, setMounted] = useState(false)
   const [sessions, setSessions] = useState<Entity[]>([])
+  const [expiringSessions, setExpiringSessions] = useState<Entity[]>([])
   const [titleFilter, setTitleFilter] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => { setMounted(true) }, [])
 
-  useEffect(() => {
+  const loadSessions = useCallback(async () => {
     if (!address) return
     setLoading(true)
-    fetchSessions(address as Hex)
-      .then((r) => setSessions(r.entities))
-      .catch(() => setError("Failed to load sessions"))
-      .finally(() => setLoading(false))
+    try {
+      const [sessionsResult, expiringResult] = await Promise.all([
+        fetchSessions(address as Hex),
+        fetchExpiringSessions(address as Hex, 30),
+      ])
+      setSessions(sessionsResult.entities)
+      setExpiringSessions(
+        expiringResult.entities.filter(
+          (s) => s.attributes?.find((a) => a.key === "status")?.value !== "archived",
+        ),
+      )
+    } catch {
+      setError("Failed to load sessions")
+    } finally {
+      setLoading(false)
+    }
   }, [address])
+
+  useEffect(() => {
+    loadSessions()
+  }, [loadSessions])
+
+  // Live auto-refresh: fires whenever entity events arrive for this owner.
+  useEffect(() => {
+    if (!address) return
+    let unsubscribe: (() => void) | undefined
+    publicClient.subscribeEntityEvents(
+      {
+        onEntityCreated: (event) => { if (event.owner === address) loadSessions() },
+        onEntityDeleted: (event) => { if (event.owner === address) loadSessions() },
+        onEntityExpired: (event) => { if (event.owner === address) loadSessions() },
+      },
+      5000,
+    ).then((fn) => { unsubscribe = fn })
+    return () => { unsubscribe?.() }
+  }, [address, loadSessions])
 
   async function handleArchive(session: Entity) {
     if (!walletClient) return
@@ -41,8 +74,20 @@ export default function Dashboard() {
       const ttlDays = ttlAttr ? parseInt(String(ttlAttr.value)) || 365 : 365
       await archiveSession(walletClient, session.key, payload, ttlDays)
       setSessions((prev) => prev.filter((s) => s.key !== session.key))
-    } catch (err: any) {
-      setError(err?.message ?? "Failed to archive session")
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to archive session")
+    }
+  }
+
+  async function handleExtend(session: Entity) {
+    if (!walletClient) return
+    try {
+      const ttlAttr = session.attributes?.find((a) => a.key === "ttlDays")
+      const additionalDays = ttlAttr ? parseInt(String(ttlAttr.value)) || 30 : 30
+      await extendSession(walletClient, session.key, additionalDays)
+      await loadSessions()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to extend session")
     }
   }
 
@@ -133,6 +178,53 @@ export default function Dashboard() {
           </div>
         )}
 
+        {/* Expiring soon — sessions with ttlDays ≤ 30, powered by lte() range query */}
+        {expiringSessions.length > 0 && (
+          <div className="mb-8">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="font-mono text-xs text-[#e8442a]">⚠ Expiring soon</span>
+              <span className="font-mono text-xs text-[#3d3d3d]">({expiringSessions.length})</span>
+            </div>
+            <div className="space-y-2">
+              {expiringSessions.map((s) => {
+                const attrs = s.attributes ?? []
+                const isEncrypted = attrs.find((a) => a.key === "encrypted")?.value === "true"
+                const modeVal = (
+                  isEncrypted
+                    ? attrs.find((a) => a.key === "mode")?.value
+                    : (() => { try { return (s.toJson() as SessionPayload).mode } catch { return "lex" } })()
+                ) as AgentMode
+                const titleVal = isEncrypted
+                  ? String(attrs.find((a) => a.key === "title")?.value ?? "Encrypted session")
+                  : (() => { try { return (s.toJson() as SessionPayload).title } catch { return s.key } })()
+                const ttlVal = attrs.find((a) => a.key === "ttlDays")?.value
+                const config = MODE_CONFIG[modeVal ?? "lex"]
+
+                return (
+                  <div
+                    key={s.key}
+                    className="flex items-center justify-between px-4 py-3 border border-[#e8442a]/20 bg-[#e8442a]/5"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="text-sm">{config?.icon}</span>
+                      <span className="text-sm text-[#f0ede8] truncate">{titleVal}</span>
+                      {ttlVal !== undefined && (
+                        <span className="font-mono text-xs text-[#6b6b6b] flex-shrink-0">{ttlVal}d TTL</span>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => handleExtend(s)}
+                      className="flex-shrink-0 ml-4 px-3 py-1 text-xs font-mono border border-[#2a2a2a] hover:border-[#3d3d3d] text-[#f0ede8] transition-colors"
+                    >
+                      Extend
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {MODES.map((mode) => {
             const config = MODE_CONFIG[mode]
@@ -172,7 +264,7 @@ export default function Dashboard() {
                 ) : (
                   <div className="space-y-2">
                     {modeSessions.map((s) => (
-                      <SessionCard key={s.key} session={s} onArchive={handleArchive} />
+                      <SessionCard key={s.key} session={s} onArchive={handleArchive} onExtend={handleExtend} />
                     ))}
                   </div>
                 )}

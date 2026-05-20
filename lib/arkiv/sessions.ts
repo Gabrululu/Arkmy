@@ -37,10 +37,10 @@ export async function createSession(
 export async function fetchSessions(ownerAddress: Hex) {
   return publicClient
     .buildQuery()
+    .ownedBy(ownerAddress)
     .where([
       eq(PROJECT_ATTRIBUTE.key, PROJECT_ATTRIBUTE.value),
       eq("type", "agent_session"),
-      eq("owner", ownerAddress),
     ])
     .withPayload(true)
     .withAttributes(true)

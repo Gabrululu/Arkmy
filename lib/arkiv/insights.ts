@@ -51,13 +51,15 @@ export async function saveInsight(
   })
 }
 
+// Uses .createdBy() for tamper-proof attribution: only insights written by the actual
+// owner wallet are injected into the AI system prompt. Prevents spoofed insights.
 export async function fetchInsights(ownerAddress: Hex, mode: AgentMode) {
   return publicClient
     .buildQuery()
+    .createdBy(ownerAddress)
     .where([
       eq(PROJECT_ATTRIBUTE.key, PROJECT_ATTRIBUTE.value),
       eq("type", "agent_insight"),
-      eq("owner", ownerAddress),
       eq("mode", mode),
       eq("pinned", "true"),
     ])
