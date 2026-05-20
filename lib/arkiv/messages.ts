@@ -2,7 +2,7 @@ import { eq, asc } from "@arkiv-network/sdk/query"
 import { ExpirationTime, jsonToPayload } from "@arkiv-network/sdk/utils"
 import type { Hex } from "@arkiv-network/sdk"
 import type { AgentMode } from "./sessions"
-import { publicClient, createSigningClient, PROJECT_ATTRIBUTE } from "./client"
+import { publicClient, createSigningClient, PROJECT_ATTRIBUTE, type ConnectedWalletClient } from "./client"
 
 export type MessageRole = "user" | "assistant"
 
@@ -14,7 +14,7 @@ export type MessagePayload = {
 }
 
 export async function saveMessage(
-  walletClient: any,
+  walletClient: ConnectedWalletClient,
   {
     sessionKey,
     role,
@@ -51,8 +51,11 @@ export async function saveMessage(
   })
 }
 
-export async function fetchMessages(sessionKey: Hex) {
-  return publicClient
+export async function fetchMessages(
+  sessionKey: Hex,
+  { limit, cursor }: { limit?: number; cursor?: string } = {},
+) {
+  const builder = publicClient
     .buildQuery()
     .where([
       eq(PROJECT_ATTRIBUTE.key, PROJECT_ATTRIBUTE.value),
@@ -63,7 +66,11 @@ export async function fetchMessages(sessionKey: Hex) {
     .withPayload(true)
     .withAttributes(true)
     .withMetadata(true)
-    .fetch()
+
+  if (limit !== undefined) builder.limit(limit)
+  if (cursor !== undefined) builder.cursor(cursor)
+
+  return builder.fetch()
 }
 
 export async function fetchMessagesByRole(sessionKey: Hex, role: MessageRole) {
@@ -85,7 +92,7 @@ export async function fetchMessagesByRole(sessionKey: Hex, role: MessageRole) {
 // Saves the assistant message and all its extracted insights in a single
 // on-chain transaction via mutateEntities. Keeps the AI turn atomic.
 export async function batchSaveAssistantTurn(
-  walletClient: any,
+  walletClient: ConnectedWalletClient,
   {
     sessionKey,
     content,

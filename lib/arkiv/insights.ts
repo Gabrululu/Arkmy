@@ -2,7 +2,7 @@ import { eq, or, and } from "@arkiv-network/sdk/query"
 import { ExpirationTime, jsonToPayload } from "@arkiv-network/sdk/utils"
 import type { Hex } from "@arkiv-network/sdk"
 import type { AgentMode } from "./sessions"
-import { publicClient, createSigningClient, PROJECT_ATTRIBUTE } from "./client"
+import { publicClient, createSigningClient, PROJECT_ATTRIBUTE, type ConnectedWalletClient } from "./client"
 
 export type InsightCategory = "risk" | "finding" | "alert" | "reminder" | "clause" | "deadline" | "symptom" | "pattern" | "methodology" | "gap"
 
@@ -13,7 +13,7 @@ export type InsightPayload = {
 }
 
 export async function saveInsight(
-  walletClient: any,
+  walletClient: ConnectedWalletClient,
   {
     sessionKey,
     mode,

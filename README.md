@@ -26,13 +26,14 @@ Every conversation lives exclusively on Arkiv as on-chain entities tied to your 
 
 ### The Arkiv data model
 
-Arkmy writes four entity types to the [Arkiv Braga testnet](https://explorer.braga.hoodi.arkiv.network):
+Arkmy writes five entity types to the [Arkiv Braga testnet](https://explorer.braga.hoodi.arkiv.network):
 
 ```
-agent_session    — the conversation container (mode, title, TTL)
+agent_session    — the conversation container (mode, title, TTL); optionally envelope-encrypted
 agent_message    — each user/assistant turn, immutable on-chain
 agent_insight    — key findings auto-extracted from responses, lives 2× TTL
 agent_delegate   — time-scoped read access granted to another wallet
+access_grant     — cryptographic authorization token for encrypted sessions (auto-revokes on expiry)
 ```
 
 Every entity is stamped with a unique `PROJECT_ATTRIBUTE` (`arkmy-confidential-agents-4z8w`) so queries never collide with other projects sharing the same public chain.
@@ -42,6 +43,7 @@ Every entity is stamped with a unique `PROJECT_ATTRIBUTE` (`arkmy-confidential-a
 - **`$owner`** = your wallet. Only you can update or extend your sessions and insights.
 - **`$creator`** = set at write time, immutable — provides tamper-proof attribution.
 - **Delegates** are separate entities with their own TTL. Access expires automatically; no manual revocation needed.
+- **Encrypted sessions** use envelope encryption (AES-GCM CEK + wallet-derived KEK). Plaintext never reaches the chain. Access grants serve as on-chain authorization tokens that auto-revoke when their TTL expires.
 
 ### Memory-aware AI
 
@@ -91,11 +93,14 @@ arkmy/
 │       └── extract/route.ts             # POST: extract text from PDF/DOCX/TXT
 ├── lib/
 │   ├── arkiv/
-│   │   ├── client.ts                     # publicClient + createSigningClient (Braga)
-│   │   ├── sessions.ts                   # CRUD for agent_session entities
-│   │   ├── messages.ts                   # CRUD + batchSaveAssistantTurn (mutateEntities)
+│   │   ├── client.ts                     # publicClient + createSigningClient + ConnectedWalletClient
+│   │   ├── sessions.ts                   # CRUD + createEncryptedSession + decryptSessionPayload
+│   │   ├── messages.ts                   # CRUD + batchSaveAssistantTurn + cursor pagination
 │   │   ├── insights.ts                   # CRUD + fetchInsightsByCategory (or/and queries)
-│   │   └── delegates.ts                  # CRUD for agent_delegate entities
+│   │   ├── delegates.ts                  # CRUD for agent_delegate entities
+│   │   └── grants.ts                     # AccessGrant CRUD (createAccessGrant, revokeAccessGrant)
+│   ├── crypto/
+│   │   └── index.ts                      # deriveKEK, encryptEnvelope, decryptEnvelope (SubtleCrypto)
 │   ├── ai/
 │   │   ├── prompts.ts                    # System prompts + MODE_CONFIG + insight parsing
 │   │   └── memory.ts                     # Load pinned insights → inject into system prompt
@@ -169,6 +174,10 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Using the App
 
+### Dashboard title filter
+
+The dashboard includes a live text filter. Typing in the **Filter by title…** input narrows sessions across all three mode columns client-side with no additional Arkiv queries.
+
 ### Create a session
 
 1. Go to **Dashboard** → connect your wallet
@@ -199,6 +208,7 @@ Click **Insights** in the session header to see all pinned findings for that ses
 
 ### `agent_session`
 
+**Plain (default)**
 ```ts
 payload:    { title: string, mode: "lex"|"bio"|"doc", createdAt: string }
 attributes: [
@@ -207,9 +217,19 @@ attributes: [
   { key: "owner",    value: "0x..." },
   { key: "mode",     value: "lex"|"bio"|"doc" },
   { key: "status",   value: "active"|"archived" },
-  { key: "ttlDays",  value: "<number>" },
+  { key: "ttlDays",  value: <number> },          // stored as number → supports lte() range queries
 ]
 expiresIn: ExpirationTime.fromDays(ttlDays)
+```
+
+**Encrypted (via `createEncryptedSession`)**
+```ts
+payload:    JSON.stringify(EncryptedEnvelope)     // { wrappedKey, keyIV, iv, ciphertext } — all base64
+attributes: [
+  ...same as above,
+  { key: "encrypted", value: "true" },
+]
+// Decrypt: decryptSessionPayload(walletClient, session) → SessionPayload
 ```
 
 ### `agent_message`
@@ -221,10 +241,11 @@ attributes: [
   { key: "type",          value: "agent_message" },
   { key: "sessionId",     value: "<session entityKey>" },
   { key: "owner",         value: "0x..." },
-  { key: "messageIndex",  value: <number> },   // numeric — supports asc/desc ordering
+  { key: "messageIndex",  value: <number> },   // numeric — supports asc/desc ordering + cursor pagination
   { key: "role",          value: "user"|"assistant" },
 ]
 expiresIn: ExpirationTime.fromDays(ttlDays)
+// Paginate: fetchMessages(sessionKey, { limit: 20, cursor }) → QueryResult with .hasNextPage() / .next()
 ```
 
 ### `agent_insight`
@@ -258,6 +279,25 @@ attributes: [
 expiresIn: ExpirationTime.fromDays(7 | 30 | 90)
 ```
 
+### `access_grant`
+
+Authorization token for encrypted sessions. When the TTL elapses the entity expires on-chain — no explicit revocation step required. Early revocation is also possible via `revokeAccessGrant` (`deleteEntity`).
+
+```ts
+payload:    new Uint8Array(0)                    // no payload — the entity's existence is the grant
+attributes: [
+  { key: "project",   value: "arkmy-confidential-agents-4z8w" },
+  { key: "type",      value: "access_grant" },
+  { key: "sessionId", value: "<session entityKey>" },
+  { key: "owner",     value: "0x..." },
+  { key: "delegate",  value: "0x..." },
+  { key: "ttlDays",   value: <number> },
+]
+expiresIn: ExpirationTime.fromDays(ttlDays)
+// Check: hasActiveGrant(sessionKey, delegateAddress) → boolean
+// Revoke early: revokeAccessGrant(walletClient, grantKey)
+```
+
 ---
 
 ## Key Design Decisions
@@ -274,7 +314,74 @@ expiresIn: ExpirationTime.fromDays(7 | 30 | 90)
 
 **Delegate access self-expires.** There is no revoke button. Revocation is implicit — delegate entities have their own TTL and vanish automatically. This eliminates an entire class of access-control bugs.
 
+**Envelope encryption.** Encrypted sessions use a two-layer AES-GCM scheme: a random per-session Content Encryption Key (CEK) encrypts the payload; the CEK is wrapped with a wallet-derived Key Encryption Key (KEK). The KEK is derived by having the wallet sign a fixed message (`"arkmy-kek-v1"`) and passing the result through SubtleCrypto HKDF-SHA256 — deterministic, no private-key exposure, no external crypto library required. Plaintext never leaves the browser.
+
+**Auto-revoking AccessGrants.** `access_grant` entities pair with encrypted sessions as on-chain authorization tokens. Creating a grant with a short TTL means it self-destructs on-chain at expiry — automatic revocation without any cron job or server call. Early revocation is also available via `deleteEntity`. `hasActiveGrant()` is the single check-point before serving decrypted content to a delegate.
+
+**Numeric `ttlDays` enables range queries.** The `ttlDays` attribute is stored as a number (not a string) so Arkiv can apply `lte("ttlDays", n)` to find sessions expiring within a given window. `fetchExpiringSessions(owner, maxDays)` uses this to surface sessions nearing expiry.
+
+**Cursor-based pagination in `fetchMessages`.** `fetchMessages` accepts optional `{ limit, cursor }` parameters. The returned `QueryResult` exposes `.hasNextPage()` and `.next()` for forward iteration — useful for long chat histories where loading all messages at once is impractical.
+
+**Typed wallet client.** All Arkiv write functions accept `ConnectedWalletClient` (`WalletClient<Transport, Chain | undefined, Account>` from viem) instead of `any`. The type is defined once in `client.ts` and re-exported, ensuring TypeScript surfaces missing-account errors at compile time.
+
 **Memory injection.** Before every API call, `buildSystemPromptWithMemory()` queries all pinned insights for the active wallet + mode and appends them to the system prompt. The agent has continuity across sessions without any server-side state.
+
+---
+
+## Encryption API
+
+All functions live in `lib/crypto/index.ts` and use the browser's native `SubtleCrypto` — no external crypto library required.
+
+### Key derivation
+
+```ts
+import { deriveKEK } from "@/lib/crypto"
+
+const kek = await deriveKEK(walletClient)
+// walletClient signs "arkmy-kek-v1" → HKDF-SHA256 → AES-GCM CryptoKey (256-bit)
+// Same wallet always produces the same KEK. The signature is the secret.
+```
+
+### Encrypt a session
+
+```ts
+import { createEncryptedSession, decryptSessionPayload } from "@/lib/arkiv/sessions"
+
+// Write — payload stored as { wrappedKey, keyIV, iv, ciphertext } on-chain
+const { entityKey } = await createEncryptedSession(walletClient, { title, mode, ttlDays })
+
+// Read — requires the owner's wallet to re-derive the KEK
+const payload = await decryptSessionPayload(walletClient, sessionEntity)  // → SessionPayload
+```
+
+### AccessGrants
+
+```ts
+import {
+  createAccessGrant,
+  revokeAccessGrant,
+  fetchActiveGrants,
+  hasActiveGrant,
+} from "@/lib/arkiv/grants"
+
+// Grant access (auto-revokes after ttlDays)
+await createAccessGrant(walletClient, { sessionKey, delegateAddress, ttlDays: 30 })
+
+// Check before serving content
+const allowed = await hasActiveGrant(sessionKey, delegateAddress)
+
+// Revoke early
+await revokeAccessGrant(walletClient, grantKey)
+```
+
+### Range query — sessions expiring soon
+
+```ts
+import { fetchExpiringSessions } from "@/lib/arkiv/sessions"
+
+// lte("ttlDays", 30) — requires ttlDays stored as number, not string
+const result = await fetchExpiringSessions(ownerAddress, 30)
+```
 
 ---
 
@@ -300,16 +407,6 @@ Set `ANTHROPIC_API_KEY` in your Vercel project settings under **Environment Vari
 | **Explorer** | [explorer.braga.hoodi.arkiv.network](https://explorer.braga.hoodi.arkiv.network) |
 | **Faucet** | [braga.hoodi.arkiv.network/faucet](https://braga.hoodi.arkiv.network/faucet/) |
 | **Docs** | [docs.arkiv.network](https://docs.arkiv.network) |
-
----
-
-## Challenge Context
-
-Submitted to the [Arkiv × ETHNS Builder Challenge](https://github.com/Arkiv-Network/arkiv-ethns-builder-challenge) during Genesis Block Month at Network School.
-
-- **Theme:** AI + Privacy (hybrid)
-- **Submission deadline:** May 25, 2026 — 23:59 UTC
-- **Submit at:** [forms.arkiv.network/ethns-arkiv-challenge](https://forms.arkiv.network/ethns-arkiv-challenge)
 
 ---
 

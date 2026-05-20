@@ -1,5 +1,8 @@
 import { createPublicClient, createWalletClient, http, custom } from "@arkiv-network/sdk"
 import { braga } from "@arkiv-network/sdk/chains"
+import type { Account, Chain, Transport, WalletClient } from "viem"
+
+export type ConnectedWalletClient = WalletClient<Transport, Chain | undefined, Account>
 
 export const PROJECT_ATTRIBUTE = {
   key: "project",
@@ -13,7 +16,7 @@ export const publicClient = createPublicClient({
   transport: http(BRAGA_RPC),
 })
 
-export function createSigningClient(viemWalletClient: any) {
+export function createSigningClient(viemWalletClient: ConnectedWalletClient) {
   if (!viemWalletClient.account) {
     throw new Error("WalletClient has no account")
   }

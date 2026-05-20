@@ -18,6 +18,7 @@ export default function Dashboard() {
   const { data: walletClient } = useWalletClient()
   const [mounted, setMounted] = useState(false)
   const [sessions, setSessions] = useState<Entity[]>([])
+  const [titleFilter, setTitleFilter] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -61,13 +62,18 @@ export default function Dashboard() {
     )
   }
 
+  const filterLower = titleFilter.toLowerCase()
   const sessionsByMode = MODES.reduce(
     (acc, mode) => ({
       ...acc,
       [mode]: sessions.filter((s) => {
         try {
           const p = s.toJson() as SessionPayload
-          return p.mode === mode && s.attributes?.find((a) => a.key === "status")?.value !== "archived"
+          return (
+            p.mode === mode &&
+            s.attributes?.find((a) => a.key === "status")?.value !== "archived" &&
+            (filterLower === "" || p.title.toLowerCase().includes(filterLower))
+          )
         } catch {
           return false
         }
@@ -100,6 +106,13 @@ export default function Dashboard() {
           <p className="font-mono text-xs text-[#3d3d3d] mt-1">
             {address?.slice(0, 8)}…{address?.slice(-6)}
           </p>
+          <input
+            type="text"
+            placeholder="Filter by title…"
+            value={titleFilter}
+            onChange={(e) => setTitleFilter(e.target.value)}
+            className="mt-4 w-full max-w-xs bg-transparent border border-[#2a2a2a] px-3 py-1.5 font-mono text-xs text-[#f0ede8] placeholder-[#3d3d3d] focus:outline-none focus:border-[#3d3d3d]"
+          />
         </div>
 
         {error && (
