@@ -104,6 +104,7 @@ export async function createEncryptedSession(
       { key: "type", value: "agent_session" },
       { key: "owner", value: owner },
       { key: "mode", value: mode },
+      { key: "title", value: title },
       { key: "status", value: "active" },
       { key: "ttlDays", value: ttlDays },
       { key: "encrypted", value: "true" },
@@ -112,11 +113,13 @@ export async function createEncryptedSession(
 }
 
 // Decrypts an encrypted session's payload back to SessionPayload.
-// Requires the owner's wallet to re-derive the KEK.
+// Falls back to toJson() for non-encrypted sessions so callers don't need to branch.
 export async function decryptSessionPayload(
   walletClient: ConnectedWalletClient,
   session: Entity,
 ): Promise<SessionPayload> {
+  const isEncrypted = session.attributes?.find((a) => a.key === "encrypted")?.value === "true"
+  if (!isEncrypted) return session.toJson() as SessionPayload
   if (!session.payload) throw new Error("Session has no payload")
   const envelope: EncryptedEnvelope = JSON.parse(new TextDecoder().decode(session.payload))
   const plaintext = await decryptEnvelope(walletClient, envelope)

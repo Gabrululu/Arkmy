@@ -67,11 +67,23 @@ export default function Dashboard() {
     (acc, mode) => ({
       ...acc,
       [mode]: sessions.filter((s) => {
+        const attrs = s.attributes ?? []
+        const status = attrs.find((a) => a.key === "status")?.value
+        if (status === "archived") return false
+
+        const isEncrypted = attrs.find((a) => a.key === "encrypted")?.value === "true"
+        if (isEncrypted) {
+          const attrMode = attrs.find((a) => a.key === "mode")?.value
+          if (attrMode !== mode) return false
+          if (filterLower === "") return true
+          const attrTitle = String(attrs.find((a) => a.key === "title")?.value ?? "")
+          return attrTitle.toLowerCase().includes(filterLower)
+        }
+
         try {
           const p = s.toJson() as SessionPayload
           return (
             p.mode === mode &&
-            s.attributes?.find((a) => a.key === "status")?.value !== "archived" &&
             (filterLower === "" || p.title.toLowerCase().includes(filterLower))
           )
         } catch {

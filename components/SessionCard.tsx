@@ -17,20 +17,33 @@ interface SessionCardProps {
 }
 
 export function SessionCard({ session, onArchive }: SessionCardProps) {
-  let payload: SessionPayload | null = null
-  try {
-    payload = session.toJson() as SessionPayload
-  } catch {
-    return null
+  const isEncrypted = session.attributes?.find((a) => a.key === "encrypted")?.value === "true"
+
+  let title: string
+  let mode: "lex" | "bio" | "doc"
+  let createdAt: string
+
+  if (isEncrypted) {
+    mode = (session.attributes?.find((a) => a.key === "mode")?.value ?? "lex") as "lex" | "bio" | "doc"
+    title = (session.attributes?.find((a) => a.key === "title")?.value as string | undefined) ?? "Encrypted session"
+    createdAt = ""
+  } else {
+    let payload: SessionPayload | null = null
+    try {
+      payload = session.toJson() as SessionPayload
+    } catch {
+      return null
+    }
+    mode = payload.mode
+    title = payload.title
+    createdAt = new Date(payload.createdAt).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    })
   }
 
-  const mode = payload.mode
   const config = MODE_CONFIG[mode]
-  const createdAt = new Date(payload.createdAt).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  })
 
   return (
     <div className="p-4 border border-[#2a2a2a] bg-[#141414] hover:border-[#3d3d3d] transition-colors">
@@ -40,9 +53,14 @@ export function SessionCard({ session, onArchive }: SessionCardProps) {
             <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 border text-xs font-mono font-medium ${MODE_BADGE[mode]}`}>
               {config.icon} {config.label}
             </span>
+            {isEncrypted && (
+              <span className="font-mono text-[10px] text-[#3d3d3d] border border-[#2a2a2a] px-1.5 py-0.5">
+                🔒 encrypted
+              </span>
+            )}
           </div>
-          <h3 className="text-sm font-medium text-[#f0ede8] truncate">{payload.title}</h3>
-          <p className="text-xs text-[#3d3d3d] mt-0.5 font-mono">Created {createdAt}</p>
+          <h3 className="text-sm font-medium text-[#f0ede8] truncate">{title}</h3>
+          {createdAt && <p className="text-xs text-[#3d3d3d] mt-0.5 font-mono">Created {createdAt}</p>}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           {onArchive && (

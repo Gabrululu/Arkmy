@@ -156,7 +156,7 @@ export default function InsightsPage() {
         )}
 
         {error && (
-          <div className="px-4 py-3 bg-red-500/10 border border-red-500/20 text-sm text-red-400">
+          <div className="px-4 py-3 bg-[#e8442a]/5 border border-[#e8442a]/30 text-sm text-[#e8442a]">
             {error}
           </div>
         )}

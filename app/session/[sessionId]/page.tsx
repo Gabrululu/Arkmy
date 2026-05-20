@@ -5,7 +5,7 @@ import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useAccount } from "wagmi"
 import type { Hex } from "@arkiv-network/sdk"
-import type { SessionPayload } from "@/lib/arkiv/sessions"
+import type { AgentMode, SessionPayload } from "@/lib/arkiv/sessions"
 import type { MessagePayload } from "@/lib/arkiv/messages"
 import { fetchSessionByKey } from "@/lib/arkiv/sessions"
 import { fetchMessages } from "@/lib/arkiv/messages"
@@ -43,7 +43,15 @@ export default function SessionPage() {
       setError(null)
       try {
         const session = await fetchSessionByKey(sessionId)
-        const payload = session.toJson() as SessionPayload
+        const isEncrypted = session.attributes?.find((a) => a.key === "encrypted")?.value === "true"
+        let payload: SessionPayload
+        if (isEncrypted) {
+          const modeAttr = session.attributes?.find((a) => a.key === "mode")?.value as AgentMode | undefined
+          const titleAttr = session.attributes?.find((a) => a.key === "title")?.value as string | undefined
+          payload = { title: titleAttr ?? "Encrypted session", mode: modeAttr ?? "lex", createdAt: "" }
+        } else {
+          payload = session.toJson() as SessionPayload
+        }
         setSessionData(payload)
 
         const ownerAttr = session.attributes?.find((a) => a.key === "owner")
@@ -109,7 +117,7 @@ export default function SessionPage() {
   if (error || !sessionData || !canAccess) {
     return (
       <div className="min-h-screen bg-[#0f0f0f] flex flex-col items-center justify-center gap-4">
-        <p className="text-sm text-red-400">{error ?? "Session not found"}</p>
+        <p className="text-sm text-[#e8442a]">{error ?? "Session not found"}</p>
         <Link href="/dashboard" className="text-xs text-[#6b6b6b] hover:text-[#f0ede8]">
           Back to Dashboard
         </Link>

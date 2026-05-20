@@ -77,17 +77,17 @@ export function FileUpload({ onFileExtracted, onError, disabled }: FileUploadPro
       {...getRootProps()}
       className={`relative flex items-center justify-center px-4 py-3 border border-dashed cursor-pointer transition-colors ${
         isDragActive
-          ? "border-neutral-400 bg-neutral-800"
+          ? "border-[#6b6b6b] bg-[#1a1a1a]"
           : uploading
-            ? "border-neutral-600 bg-neutral-900"
-            : "border-neutral-700 hover:border-neutral-500 bg-neutral-900/50"
+            ? "border-[#3d3d3d] bg-[#141414]"
+            : "border-[#2a2a2a] hover:border-[#3d3d3d] bg-[#141414]"
       } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
     >
       <input {...getInputProps()} />
-      <div className="flex items-center gap-2 text-sm text-neutral-400">
+      <div className="flex items-center gap-2 text-sm text-[#6b6b6b]">
         {uploading ? (
           <>
-            <span className="w-3.5 h-3.5 border-2 border-neutral-500 border-t-neutral-200 rounded-full animate-spin flex-shrink-0" />
+            <span className="w-3.5 h-3.5 border-2 border-[#3d3d3d] border-t-[#f0ede8] rounded-full animate-spin flex-shrink-0" />
             <span className="truncate max-w-[200px]">
               Reading {uploadingName ?? "file"}…
             </span>
