@@ -101,13 +101,8 @@ export async function POST(req: NextRequest) {
       fileName: file.name,
     })
   } catch (err) {
+    const msg = err instanceof Error ? `${err.constructor.name}: ${err.message}` : String(err)
     console.error("[extract] Error processing file:", err)
-    const msg = err instanceof Error ? err.message : String(err)
-    const userMsg = msg.includes("password") || msg.includes("encrypted")
-      ? "This PDF is password-protected. Remove the password and try again."
-      : msg.includes("Invalid PDF")
-      ? "Could not read this PDF — it may be corrupted."
-      : "Failed to extract text from file."
-    return Response.json({ error: userMsg }, { status: 500 })
+    return Response.json({ error: msg }, { status: 500 })
   }
 }
