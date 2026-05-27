@@ -1,16 +1,16 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useAccount, useConnect, useDisconnect, useChainId, useSwitchChain } from "wagmi"
+import { useConnection, useConnect, useDisconnect, useChainId, useSwitchChain } from "wagmi"
 import { bragaChain } from "@/lib/wagmi/config"
 
 export function WalletConnect() {
   const [mounted, setMounted] = useState(false)
-  const { address, isConnected } = useAccount()
+  const { address, isConnected } = useConnection()
   const { connect, connectors, error, isPending } = useConnect()
   const { disconnect } = useDisconnect()
   const chainId = useChainId()
-  const { switchChain } = useSwitchChain()
+  const { mutate: switchChain } = useSwitchChain()
 
   useEffect(() => {
     setMounted(true)

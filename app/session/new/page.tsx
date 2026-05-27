@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { useAccount, useWalletClient, useChainId, useSwitchChain } from "wagmi"
+import { useConnection, useWalletClient, useChainId, useSwitchChain } from "wagmi"
 import type { AgentMode } from "@/lib/arkiv/sessions"
 import { createSession } from "@/lib/arkiv/sessions"
 import { MODE_CONFIG } from "@/lib/ai/prompts"
@@ -15,10 +15,10 @@ import { bragaChain } from "@/lib/wagmi/config"
 function NewSessionForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { isConnected } = useAccount()
+  const { isConnected } = useConnection()
   const { data: walletClient } = useWalletClient()
   const chainId = useChainId()
-  const { switchChain, isPending: isSwitching } = useSwitchChain()
+  const { mutate: switchChain, isPending: isSwitching } = useSwitchChain()
 
   const presetMode = searchParams.get("mode") as AgentMode | null
   const [step, setStep] = useState<1 | 2>(presetMode ? 2 : 1)
@@ -48,6 +48,8 @@ function NewSessionForm() {
         mode,
         ttlDays,
       })
+      // Brief pause so the Braga indexer can register the entity before querying it
+      await new Promise((r) => setTimeout(r, 1_500))
       router.push(`/session/${entityKey}`)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)

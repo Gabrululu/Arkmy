@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
 import type { Entity } from "@arkiv-network/sdk"
 import type { SessionPayload } from "@/lib/arkiv/sessions"
@@ -18,6 +19,7 @@ interface SessionCardProps {
 }
 
 export function SessionCard({ session, onArchive, onExtend }: SessionCardProps) {
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const isEncrypted = session.attributes?.find((a) => a.key === "encrypted")?.value === "true"
 
   let title: string
@@ -65,12 +67,29 @@ export function SessionCard({ session, onArchive, onExtend }: SessionCardProps) 
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           {onArchive && (
-            <button
-              onClick={() => onArchive(session)}
-              className="text-xs text-[#3d3d3d] hover:text-[#6b6b6b] transition-colors"
-            >
-              Archive
-            </button>
+            confirmDelete ? (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { onArchive(session); setConfirmDelete(false) }}
+                  className="text-xs text-[#e8442a] hover:text-[#ff5540] transition-colors"
+                >
+                  Confirm
+                </button>
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  className="text-xs text-[#3d3d3d] hover:text-[#6b6b6b] transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="text-xs text-[#3d3d3d] hover:text-[#e8442a] transition-colors"
+              >
+                Delete
+              </button>
+            )
           )}
           {onExtend && (
             <button

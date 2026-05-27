@@ -54,7 +54,8 @@ export async function POST(req: NextRequest) {
       fileName: file.name,
     })
   } catch (err) {
+    const msg = err instanceof Error ? `${err.constructor.name}: ${err.message}` : String(err)
     console.error("[extract] Error processing file:", err)
-    return Response.json({ error: "Failed to extract text from file" }, { status: 500 })
+    return Response.json({ error: msg }, { status: 500 })
   }
 }

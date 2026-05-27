@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import type { Hex } from "@arkiv-network/sdk"
 import type { Entity } from "@arkiv-network/sdk"
 import { fetchDelegates, createDelegate } from "@/lib/arkiv/delegates"
-import { useAccount, useWalletClient } from "wagmi"
+import { useConnection, useWalletClient } from "wagmi"
 
 const TTL_OPTIONS = [7, 30, 90] as const
 
@@ -14,7 +14,7 @@ interface DelegateManagerProps {
 }
 
 export function DelegateManager({ sessionKey, isOwner }: DelegateManagerProps) {
-  const { address } = useAccount()
+  const { address } = useConnection()
   const { data: walletClient } = useWalletClient()
   const [delegates, setDelegates] = useState<Entity[]>([])
   const [newDelegate, setNewDelegate] = useState("")

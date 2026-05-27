@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect, useCallback } from "react"
-import { useAccount, useWalletClient } from "wagmi"
+import { useConnection, useWalletClient } from "wagmi"
 import type { Hex } from "@arkiv-network/sdk"
 import type { Entity } from "@arkiv-network/sdk"
 import type { AgentMode, SessionPayload } from "@/lib/arkiv/sessions"
@@ -33,7 +33,7 @@ interface ChatInterfaceProps {
 }
 
 export function ChatInterface({ sessionKey, sessionData, ttlDays, initialMessages }: ChatInterfaceProps) {
-  const { address } = useAccount()
+  const { address } = useConnection()
   const { data: walletClient } = useWalletClient()
   const mode = sessionData.mode
   const config = MODE_CONFIG[mode]

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
-import { useAccount, useWalletClient } from "wagmi"
+import { useConnection, useWalletClient } from "wagmi"
 import type { Hex } from "@arkiv-network/sdk"
 import type { Entity } from "@arkiv-network/sdk"
 import type { SessionPayload, AgentMode } from "@/lib/arkiv/sessions"
@@ -15,7 +15,7 @@ import { MODE_CONFIG } from "@/lib/ai/prompts"
 const MODES: AgentMode[] = ["lex", "bio", "doc"]
 
 export default function Dashboard() {
-  const { address, isConnected } = useAccount()
+  const { address, isConnected } = useConnection()
   const { data: walletClient } = useWalletClient()
   const [mounted, setMounted] = useState(false)
   const [sessions, setSessions] = useState<Entity[]>([])
@@ -23,6 +23,7 @@ export default function Dashboard() {
   const [titleFilter, setTitleFilter] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [confirmDeleteKey, setConfirmDeleteKey] = useState<string | null>(null)
 
   useEffect(() => { setMounted(true) }, [])
 
@@ -75,7 +76,7 @@ export default function Dashboard() {
       await archiveSession(walletClient, session.key, payload, ttlDays)
       setSessions((prev) => prev.filter((s) => s.key !== session.key))
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to archive session")
+      setError(err instanceof Error ? err.message : "Failed to delete session")
     }
   }
 
@@ -212,12 +213,37 @@ export default function Dashboard() {
                         <span className="font-mono text-xs text-[#6b6b6b] flex-shrink-0">{ttlVal}d TTL</span>
                       )}
                     </div>
-                    <button
-                      onClick={() => handleExtend(s)}
-                      className="flex-shrink-0 ml-4 px-3 py-1 text-xs font-mono border border-[#2a2a2a] hover:border-[#3d3d3d] text-[#f0ede8] transition-colors"
-                    >
-                      Extend
-                    </button>
+                    <div className="flex items-center gap-3 flex-shrink-0 ml-4">
+                      {confirmDeleteKey === s.key ? (
+                        <>
+                          <button
+                            onClick={() => { handleArchive(s); setConfirmDeleteKey(null) }}
+                            className="text-xs text-[#e8442a] hover:text-[#ff5540] transition-colors"
+                          >
+                            Confirm
+                          </button>
+                          <button
+                            onClick={() => setConfirmDeleteKey(null)}
+                            className="text-xs text-[#3d3d3d] hover:text-[#6b6b6b] transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => setConfirmDeleteKey(s.key)}
+                          className="text-xs text-[#3d3d3d] hover:text-[#e8442a] transition-colors"
+                        >
+                          Delete
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleExtend(s)}
+                        className="px-3 py-1 text-xs font-mono border border-[#2a2a2a] hover:border-[#3d3d3d] text-[#f0ede8] transition-colors"
+                      >
+                        Extend
+                      </button>
+                    </div>
                   </div>
                 )
               })}

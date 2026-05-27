@@ -13,7 +13,7 @@ export const BRAGA_RPC = "https://braga.hoodi.arkiv.network/rpc"
 
 export const publicClient = createPublicClient({
   chain: braga,
-  transport: http(BRAGA_RPC),
+  transport: http(BRAGA_RPC, { timeout: 30_000, retryCount: 3, retryDelay: 1_000 }),
 })
 
 export function createSigningClient(viemWalletClient: ConnectedWalletClient) {

@@ -48,8 +48,19 @@ export async function fetchSessions(ownerAddress: Hex) {
     .fetch()
 }
 
-export async function fetchSessionByKey(sessionKey: Hex) {
-  return publicClient.getEntity(sessionKey)
+export async function fetchSessionByKey(sessionKey: Hex, retries = 4): Promise<Awaited<ReturnType<typeof publicClient.getEntity>>> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await publicClient.getEntity(sessionKey)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      const isTransient = msg.includes("context cancelled") || msg.includes("No entity found")
+      if (!isTransient || attempt === retries) throw err
+      await new Promise((r) => setTimeout(r, 1_000 * (attempt + 1)))
+    }
+  }
+  // unreachable, satisfies TS
+  throw new Error("fetchSessionByKey: exhausted retries")
 }
 
 export async function extendSession(walletClient: ConnectedWalletClient, sessionKey: Hex, additionalDays: number) {

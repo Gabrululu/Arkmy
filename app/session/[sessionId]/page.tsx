@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
-import { useAccount } from "wagmi"
+import { useConnection } from "wagmi"
 import type { Hex } from "@arkiv-network/sdk"
 import type { AgentMode, SessionPayload } from "@/lib/arkiv/sessions"
 import type { MessagePayload } from "@/lib/arkiv/messages"
@@ -24,7 +24,7 @@ const MODE_ACCENT = {
 export default function SessionPage() {
   const params = useParams()
   const sessionId = params.sessionId as Hex
-  const { address, isConnected } = useAccount()
+  const { address, isConnected } = useConnection()
 
   const [sessionData, setSessionData] = useState<SessionPayload | null>(null)
   const [ttlDays, setTtlDays] = useState(365)
