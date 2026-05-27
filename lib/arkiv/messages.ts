@@ -3,6 +3,7 @@ import { ExpirationTime, jsonToPayload } from "@arkiv-network/sdk/utils"
 import type { Hex } from "@arkiv-network/sdk"
 import type { AgentMode } from "./sessions"
 import { publicClient, createSigningClient, PROJECT_ATTRIBUTE, type ConnectedWalletClient } from "./client"
+import { withRetry } from "./retry"
 
 export type MessageRole = "user" | "assistant"
 
@@ -51,26 +52,28 @@ export async function saveMessage(
   })
 }
 
-export async function fetchMessages(
+export function fetchMessages(
   sessionKey: Hex,
   { limit, cursor }: { limit?: number; cursor?: string } = {},
 ) {
-  const builder = publicClient
-    .buildQuery()
-    .where([
-      eq(PROJECT_ATTRIBUTE.key, PROJECT_ATTRIBUTE.value),
-      eq("type", "agent_message"),
-      eq("sessionId", sessionKey),
-    ])
-    .orderBy(asc("messageIndex", "number"))
-    .withPayload(true)
-    .withAttributes(true)
-    .withMetadata(true)
+  return withRetry(() => {
+    const builder = publicClient
+      .buildQuery()
+      .where([
+        eq(PROJECT_ATTRIBUTE.key, PROJECT_ATTRIBUTE.value),
+        eq("type", "agent_message"),
+        eq("sessionId", sessionKey),
+      ])
+      .orderBy(asc("messageIndex", "number"))
+      .withPayload(true)
+      .withAttributes(true)
+      .withMetadata(true)
 
-  if (limit !== undefined) builder.limit(limit)
-  if (cursor !== undefined) builder.cursor(cursor)
+    if (limit !== undefined) builder.limit(limit)
+    if (cursor !== undefined) builder.cursor(cursor)
 
-  return builder.fetch()
+    return builder.fetch()
+  })
 }
 
 export async function fetchMessagesByRole(sessionKey: Hex, role: MessageRole) {

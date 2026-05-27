@@ -3,6 +3,7 @@ import { ExpirationTime, jsonToPayload } from "@arkiv-network/sdk/utils"
 import type { Hex, Entity } from "@arkiv-network/sdk"
 import { publicClient, createSigningClient, PROJECT_ATTRIBUTE, type ConnectedWalletClient } from "./client"
 import { encryptEnvelope, decryptEnvelope, type EncryptedEnvelope } from "@/lib/crypto"
+import { withRetry } from "./retry"
 
 export type AgentMode = "lex" | "bio" | "doc"
 
@@ -34,33 +35,24 @@ export async function createSession(
   })
 }
 
-export async function fetchSessions(ownerAddress: Hex) {
-  return publicClient
-    .buildQuery()
-    .ownedBy(ownerAddress)
-    .where([
-      eq(PROJECT_ATTRIBUTE.key, PROJECT_ATTRIBUTE.value),
-      eq("type", "agent_session"),
-    ])
-    .withPayload(true)
-    .withAttributes(true)
-    .withMetadata(true)
-    .fetch()
+export function fetchSessions(ownerAddress: Hex) {
+  return withRetry(() =>
+    publicClient
+      .buildQuery()
+      .ownedBy(ownerAddress)
+      .where([
+        eq(PROJECT_ATTRIBUTE.key, PROJECT_ATTRIBUTE.value),
+        eq("type", "agent_session"),
+      ])
+      .withPayload(true)
+      .withAttributes(true)
+      .withMetadata(true)
+      .fetch()
+  )
 }
 
-export async function fetchSessionByKey(sessionKey: Hex, retries = 4): Promise<Awaited<ReturnType<typeof publicClient.getEntity>>> {
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      return await publicClient.getEntity(sessionKey)
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
-      const isTransient = msg.includes("context cancelled") || msg.includes("No entity found")
-      if (!isTransient || attempt === retries) throw err
-      await new Promise((r) => setTimeout(r, 1_000 * (attempt + 1)))
-    }
-  }
-  // unreachable, satisfies TS
-  throw new Error("fetchSessionByKey: exhausted retries")
+export function fetchSessionByKey(sessionKey: Hex) {
+  return withRetry(() => publicClient.getEntity(sessionKey), 4)
 }
 
 export async function extendSession(walletClient: ConnectedWalletClient, sessionKey: Hex, additionalDays: number) {
@@ -137,8 +129,9 @@ export async function decryptSessionPayload(
   return JSON.parse(plaintext) as SessionPayload
 }
 
-export async function fetchExpiringSessions(ownerAddress: Hex, maxDays: number) {
-  return publicClient
+export function fetchExpiringSessions(ownerAddress: Hex, maxDays: number) {
+  return withRetry(() =>
+    publicClient
     .buildQuery()
     .where([
       eq(PROJECT_ATTRIBUTE.key, PROJECT_ATTRIBUTE.value),
@@ -150,4 +143,5 @@ export async function fetchExpiringSessions(ownerAddress: Hex, maxDays: number) 
     .withAttributes(true)
     .withMetadata(true)
     .fetch()
+  )
 }

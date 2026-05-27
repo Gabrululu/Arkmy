@@ -3,6 +3,7 @@ import { ExpirationTime, jsonToPayload } from "@arkiv-network/sdk/utils"
 import type { Hex } from "@arkiv-network/sdk"
 import type { AgentMode } from "./sessions"
 import { publicClient, createSigningClient, PROJECT_ATTRIBUTE, type ConnectedWalletClient } from "./client"
+import { withRetry } from "./retry"
 
 export type InsightCategory = "risk" | "finding" | "alert" | "reminder" | "clause" | "deadline" | "symptom" | "pattern" | "methodology" | "gap"
 
@@ -53,42 +54,43 @@ export async function saveInsight(
 
 // Uses .createdBy() for tamper-proof attribution: only insights written by the actual
 // owner wallet are injected into the AI system prompt. Prevents spoofed insights.
-export async function fetchInsights(ownerAddress: Hex, mode: AgentMode) {
-  return publicClient
-    .buildQuery()
-    .createdBy(ownerAddress)
-    .where([
-      eq(PROJECT_ATTRIBUTE.key, PROJECT_ATTRIBUTE.value),
-      eq("type", "agent_insight"),
-      eq("mode", mode),
-      eq("pinned", "true"),
-    ])
-    .withPayload(true)
-    .withAttributes(true)
-    .withMetadata(true)
-    .fetch()
+export function fetchInsights(ownerAddress: Hex, mode: AgentMode) {
+  return withRetry(() =>
+    publicClient
+      .buildQuery()
+      .createdBy(ownerAddress)
+      .where([
+        eq(PROJECT_ATTRIBUTE.key, PROJECT_ATTRIBUTE.value),
+        eq("type", "agent_insight"),
+        eq("mode", mode),
+        eq("pinned", "true"),
+      ])
+      .withPayload(true)
+      .withAttributes(true)
+      .withMetadata(true)
+      .fetch()
+  )
 }
 
-export async function fetchSessionInsights(sessionKey: Hex) {
-  return publicClient
-    .buildQuery()
-    .where([
-      eq(PROJECT_ATTRIBUTE.key, PROJECT_ATTRIBUTE.value),
-      eq("type", "agent_insight"),
-      eq("sessionId", sessionKey),
-      eq("pinned", "true"),
-    ])
-    .withPayload(true)
-    .withAttributes(true)
-    .withMetadata(true)
-    .fetch()
+export function fetchSessionInsights(sessionKey: Hex) {
+  return withRetry(() =>
+    publicClient
+      .buildQuery()
+      .where([
+        eq(PROJECT_ATTRIBUTE.key, PROJECT_ATTRIBUTE.value),
+        eq("type", "agent_insight"),
+        eq("sessionId", sessionKey),
+        eq("pinned", "true"),
+      ])
+      .withPayload(true)
+      .withAttributes(true)
+      .withMetadata(true)
+      .fetch()
+  )
 }
 
 // Fetch insights filtered by one or more categories using or() compound predicate.
-export async function fetchInsightsByCategory(
-  sessionKey: Hex,
-  categories: InsightCategory[],
-) {
+export function fetchInsightsByCategory(sessionKey: Hex, categories: InsightCategory[]) {
   if (categories.length === 0) return fetchSessionInsights(sessionKey)
 
   const categoryFilter =
@@ -96,19 +98,21 @@ export async function fetchInsightsByCategory(
       ? eq("category", categories[0])
       : or(categories.map((c) => eq("category", c)))
 
-  return publicClient
-    .buildQuery()
-    .where([
-      and([
-        eq(PROJECT_ATTRIBUTE.key, PROJECT_ATTRIBUTE.value),
-        eq("type", "agent_insight"),
-        eq("sessionId", sessionKey),
-        eq("pinned", "true"),
-        categoryFilter,
-      ]),
-    ])
-    .withPayload(true)
-    .withAttributes(true)
-    .withMetadata(true)
-    .fetch()
+  return withRetry(() =>
+    publicClient
+      .buildQuery()
+      .where([
+        and([
+          eq(PROJECT_ATTRIBUTE.key, PROJECT_ATTRIBUTE.value),
+          eq("type", "agent_insight"),
+          eq("sessionId", sessionKey),
+          eq("pinned", "true"),
+          categoryFilter,
+        ]),
+      ])
+      .withPayload(true)
+      .withAttributes(true)
+      .withMetadata(true)
+      .fetch()
+  )
 }

@@ -183,7 +183,7 @@ export default function Dashboard() {
         {expiringSessions.length > 0 && (
           <div className="mb-8">
             <div className="flex items-center gap-2 mb-3">
-              <span className="font-mono text-xs text-[#e8442a]">⚠ Expiring soon</span>
+              <span className="font-mono text-xs text-amber-500 tracking-wide">Expiring soon</span>
               <span className="font-mono text-xs text-[#3d3d3d]">({expiringSessions.length})</span>
             </div>
             <div className="space-y-2">
@@ -204,13 +204,13 @@ export default function Dashboard() {
                 return (
                   <div
                     key={s.key}
-                    className="flex items-center justify-between px-4 py-3 border border-[#e8442a]/20 bg-[#e8442a]/5"
+                    className="flex items-center justify-between px-4 py-3 border border-[#2a2a2a] bg-[#141414]"
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <span className="text-sm">{config?.icon}</span>
                       <span className="text-sm text-[#f0ede8] truncate">{titleVal}</span>
                       {ttlVal !== undefined && (
-                        <span className="font-mono text-xs text-[#6b6b6b] flex-shrink-0">{ttlVal}d TTL</span>
+                        <span className="font-mono text-xs text-amber-500/70 flex-shrink-0">{ttlVal}d left</span>
                       )}
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0 ml-4">
